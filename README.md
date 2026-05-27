@@ -1,123 +1,69 @@
 # EdgeDetect-P4
 
-Real-time on-device object detection on the **ESP32-P4**, with a polished LVGL
-landscape GUI overlaid on a live MIPI-CSI camera feed.
+在 **ESP32-P4** 上实现 MIPI 摄像头采集与显示。
 
-> Status: **GUI + camera pipeline complete**. Custom detection model
-> integration is the next milestone — see [Roadmap](#roadmap).
+> **状态**：已实现摄像头采集与 GUI 显示。
+> **规划**：集成检测模型（见 [路线图](#路线图)）。
 
-| Target SoC | Display              | Camera             | Framework |
-| ---------- | -------------------- | ------------------ | --------- |
-| ESP32-P4   | 480×800 ST7701 (MIPI-DSI) used as **800×480 landscape** | OV5647 (MIPI-CSI, 800×1280 RAW8 @ 50 fps) | ESP-IDF v5.4+, LVGL 9.4 |
+| 硬件/环境 | 规格 |
+| :--- | :--- |
+| **SoC** | ESP32-P4 |
+| **显示** | 800×480 (MIPI-DSI) |
+| **摄像头** | OV5647 (MIPI-CSI) |
+| **IDF 版本** | v5.4 |
+| **GUI 库** | LVGL 9.4 |
 
-## What it does
+## 功能描述
 
-- Brings up the OV5647 camera through ESP-Video / V4L2 + ISP.
-- Builds an LVGL GUI in landscape 800×480 (mirrors `python/gui.py`):
-  header (title + device tag), a 320×320 camera frame on the **left**, a
-  white info card on the **right** showing the current **Class** and
-  **Probability**, and a footer signature.
-- Pipes each camera frame through the **PPA** (Pixel Processing Accelerator)
-  for center-crop + scale + rotation, and blits it straight into the LCD
-  framebuffer — bypassing LVGL for the camera path so it can run at full
-  sensor rate without fighting the GUI refresh.
-- Once the GUI is rendered, the framebuffer is snapshotted and LVGL is
-  switched to `dummy_draw` mode, so the static GUI background lives in all
-  three LCD framebuffers and only the 320×320 camera region updates per
-  frame.
+- **采集驱动**：使用 ESP-Video (V4L2 + ISP) 驱动摄像头。
+- **图像处理**：利用 **PPA** 硬件完成图像裁剪、缩放和旋转。
+- **显示逻辑**：视频流直接写入 LCD 帧缓冲，不经过 LVGL 渲染层。
+- **运行策略**：GUI 渲染一次后停止刷新，仅由硬件 PPA 更新视频区域。
 
-## Repository layout
+## 目录结构
 
-```
+```text
 EdgeDetect-P4/
 ├── main/
-│   ├── main.c              # LVGL GUI build, app startup
-│   ├── camera_display.{c,h}# PPA path: V4L2 frame → LCD framebuffer
-│   ├── app_video.{c,h}     # OV5647 / V4L2 / ISP plumbing
-│   └── idf_component.yml
+│   ├── main.c              # 程序入口与 UI 静态构建
+│   ├── camera_display.c    # PPA 处理与帧缓冲写入
+│   ├── app_video.c         # V4L2 与 ISP 初始化
 ├── components/
-│   └── bsp_p4_touch_lcd/   # Board support for the 480×800 ST7701 panel
+│   └── bsp_p4_touch_lcd/   # 板级显示驱动
 ├── python/
-│   └── gui.py              # PyQt5 mock-up the firmware GUI was ported from
-├── CMakeLists.txt
-├── partitions.csv
-└── sdkconfig.defaults
+│   └── gui.py              # UI 布局参考
 ```
 
-## Build & flash
-
-Requires **ESP-IDF release/v5.4** or newer and the ESP32-P4 toolchain.
+## 编译与烧录
 
 ```bash
 . $IDF_PATH/export.sh
 idf.py set-target esp32p4
 idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor   # adjust port for your machine
+idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-## Architecture at a glance
+## 核心原理
 
-```
-┌───────────────────────┐                   ┌────────────────────────┐
-│ Startup (app_main)    │                   │ Per camera frame       │
-│                       │                   │ (camera_display_       │
-│  bsp_display_start_   │                   │  frame_cb)             │
-│  with_config()        │                   │                        │
-│  ROTATE_90  → 800×480 │                   │  V4L2 hands a buffer   │
-│  logical surface      │                   │     │                  │
-│                       │                   │     ▼                  │
-│  build_gui()  ────────┐                   │  PPA: center-crop +    │
-│  LVGL refreshes       │                   │  scale + rotate        │
-│  the GUI into fb[0]   │                   │     │                  │
-│           ▼           │                   │     ▼                  │
-│  camera_display_init  │                   │  Write 320×320 block   │
-│  → memcpy fb[0]→1,2   │                   │  into lcd_buffer[i] at │
-│  → dummy_draw=true    │                   │  the GUI's left frame  │
-│                       │                   │     │                  │
-└───────────────────────┘                   │     ▼                  │
-                                            │  esp_lv_adapter_       │
-                                            │  dummy_draw_blit()     │
-                                            │  pushes fb to LCD      │
-                                            └────────────────────────┘
-```
+1.  **UI 初始化**：使用 LVGL 绘制静态界面元素。
+2.  **FB 冻结**：将 GUI 图像同步至 LCD 的所有帧缓冲并关闭 LVGL 刷新。
+3.  **硬件旁路**：摄像头产生图像后，PPA 硬件直接处理并将像素块搬运至 LCD 帧缓冲的指定位置。
 
-Key design choices:
+## 配置项
 
-- **LVGL `ROTATE_90` software rotation** so widgets are positioned in 800×480
-  landscape coords (same coordinate system as `python/gui.py`); the LVGL
-  adapter handles rotation into the native 480×800 framebuffer.
-- **GUI rendered once, then frozen** via `dummy_draw`. Avoids LVGL contending
-  with the camera path for the same framebuffers.
-- **PPA does scale + rotation + format conversion in one transaction**
-  (no CPU touch on pixel data).
-- `CAM_PHYS_X / CAM_PHYS_Y` are *derived* from the logical position via the
-  rotation transform, so changing the GUI layout doesn't desync the camera
-  placement.
+- **位置参数**：在 `main/camera_display.h` 中修改 `CAM_LOGICAL_X/Y`。
+- **图像方向**：在 `camera_display_frame_cb` 中修改 `rotation_angle`。
+- **底层参数**：使用 `idf.py menuconfig` 修改摄像头驱动设置。
 
-## Customizing
+## 路线图
 
-- **Where the camera sits in the GUI** — edit `CAM_LOGICAL_X / CAM_LOGICAL_Y`
-  in `main/camera_display.h`. Physical offsets recompute automatically.
-- **Camera orientation** — `rotation_angle` (and `mirror_x` / `mirror_y`) in
-  `camera_display_frame_cb`. PPA angles count counter-clockwise.
-- **Sensor / resolution** — `idf.py menuconfig` → *Espressif Camera Sensors*.
+- [x] 硬件驱动与视频通路
+- [ ] 集成物体检测模型
+- [ ] 结果数据展示
+- [ ] 绘制检测框
+- [ ] SD 卡存储
 
-## Roadmap
+## 引用
 
-- [x] BSP, camera, GUI, real-time blit path
-- [ ] Integrate custom detection model (ESP-DL or hand-rolled)
-- [ ] Wire inference output into the on-screen `Class` / `Probability`
-      labels (needs a dynamic-text path that survives the `dummy_draw`
-      snapshot — see `docs/` once added)
-- [ ] Bounding-box overlay on the live camera region
-- [ ] Save / replay clips to SD card
-
-## Acknowledgements
-
-- Espressif: `esp-idf`, `esp-video`, `esp_lcd`, `esp_lvgl_adapter`, PPA driver.
-- LVGL contributors.
-
-## License
-
-TBD — pick one before publishing (MIT / Apache-2.0 are the usual choices for
-embedded demos).
+- ESP-IDF / ESP-Video / PPA Driver
+- LVGL
