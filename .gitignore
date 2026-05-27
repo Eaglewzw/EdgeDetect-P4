@@ -1,0 +1,35 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+
+# ESP-IDF managed components (regenerated from idf_component.yml)
+managed_components/
+dependencies.lock
+
+# Editor / IDE
+.vscode/
+.clangd
+.cache/
+.ccls-cache/
+compile_commands.json
+*.code-workspace
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Logs / dumps
+*.log
+*.core
+
+# Local secrets / overrides
+*.local
+.env

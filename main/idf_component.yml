@@ -1,0 +1,8 @@
+dependencies:
+  idf: ">=5.3"
+
+  lvgl/lvgl: "9.4.0"
+
+  esp_video:
+    version: "0.8.*"
+    public: true
