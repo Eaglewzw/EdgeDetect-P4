@@ -55,13 +55,6 @@ idf.py -p /dev/ttyUSB0 flash monitor
 - **图像方向**：在 `camera_display_frame_cb` 中修改 `rotation_angle`。
 - **底层参数**：使用 `idf.py menuconfig` 修改摄像头驱动设置。
 
-## 路线图
-
-- [x] 硬件驱动与视频通路
-- [ ] 集成物体检测模型
-- [ ] 结果数据展示
-- [ ] 绘制检测框
-- [ ] SD 卡存储
 
 ## 引用
 
