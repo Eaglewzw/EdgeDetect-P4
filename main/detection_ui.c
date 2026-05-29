@@ -200,11 +200,13 @@ void detection_ui_build(void)
     // shows what the bar chart looks like; real inference replaces this via
     // detection_ui_update().
     static const detection_t demo[] = {
-        { .class_name = "Person", .probability = 0.985f },
-        { .class_name = "Car",    .probability = 0.762f },
-        { .class_name = "Dog",    .probability = 0.541f },
-        { .class_name = "Bus",    .probability = 0.318f },
-        { .class_name = "Bird",   .probability = 0.142f },
+        { .class_name = "Person",       .probability = 0.985f },
+        { .class_name = "Car",          .probability = 0.762f },
+        { .class_name = "Dog",          .probability = 0.541f },
+        { .class_name = "Bus",          .probability = 0.318f },
+        { .class_name = "Bird",         .probability = 0.142f },
+        { .class_name = "sheep",        .probability = 0.582f },
+        { .class_name = "motorcycle",   .probability = 0.242f },
     };
     detection_ui_update(demo, sizeof(demo) / sizeof(demo[0]));
 }

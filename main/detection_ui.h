@@ -9,7 +9,7 @@ extern "C" {
 // Number of horizontal bars rendered inside the info card. Detections beyond
 // this count are dropped (caller should pre-sort by probability and pass the
 // top ones first).
-#define DETECTION_UI_MAX_BARS 5
+#define DETECTION_UI_MAX_BARS 6
 
 // One detection result. `class_name` is held by reference — keep it alive
 // until you next call detection_ui_update().
